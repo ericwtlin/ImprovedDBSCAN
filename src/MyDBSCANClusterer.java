@@ -198,6 +198,14 @@ public class MyDBSCANClusterer<T extends Clusterable> extends Clusterer<T> {
         return cluster;
     }
 
+    private Cluster<T> expandClusterBasedOnSNN(final Cluster<T> cluster,
+                                               final T point,
+                                               final List<T> neighors,
+                                               final Collection<T> points,
+                                               final Map<Clusterable, PointStatus> visited){
+        return cluster;
+    }
+
     /**
      * Returns a list of density-reachable neighbors of a {@code point}.
      *
@@ -230,5 +238,11 @@ public class MyDBSCANClusterer<T extends Clusterable> extends Clusterer<T> {
             }
         }
         return one;
+    }
+
+
+    private List<T> getSNNNeighbors(final T point, final Collection<T> points){
+        final List<T> SNNNeighbors = new ArrayList<T>();
+        return SNNNeighbors;
     }
 }
