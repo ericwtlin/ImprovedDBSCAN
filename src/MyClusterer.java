@@ -75,7 +75,7 @@ public class MyClusterer {
 		// STEP 2 - sparsify the matrix by keeping only the k most similar neighbors, get core points
 
 		// find the K-neighbors of each point
-		HashMap<Integer, HashSet<Integer>> kns = new HashMap<Integer, HashSet<Integer>>();
+		HashSet<Integer>[] kns = new HashSet[N];
 		HashSet<Integer> hs;
 
         boolean[] cores = new boolean[N];
@@ -87,7 +87,7 @@ public class MyClusterer {
 			hs = new HashSet<Integer>();
 			for (int j = 1; j <= K; j++) // start from the 2nd nn
 				hs.add((Integer) nns[j]);
-            kns.put(i, hs);
+            kns[i] = hs;
 
             /**
              * If the distance between current node and the (minPts+1)-th nearest neighbors is larger than Eps,
@@ -107,7 +107,8 @@ public class MyClusterer {
 
 		// The sparse matrix S holds in element (i,j) the SNN-similarity between
 		// points i and j.
-		CRSMatrix S = new CRSMatrix(N, N);
+		//CRSMatrix S = new CRSMatrix(N, N);
+        int[][] S = new int[N][N];
 		int count;
 
 		Scheduler scheduler = new Scheduler(N-1);
@@ -120,10 +121,12 @@ public class MyClusterer {
 			for (int j = i + 1; j < N; j++) {
 				// create a link between i-j only if i is in j's kNN neighborhood
 				// and j is in i's kNN neighborhood
-				if (kns.get(i).contains(j) && kns.get(j).contains(i)) {
-					count = countIntersect(kns.get(i), kns.get(j));
-					S.set(i, j, count);
-					S.set(j, i, count);
+				if (kns[i].contains(j) && kns[j].contains(i)) {
+					count = countIntersect(kns[i], kns[j]);
+					//S.set(i, j, count);
+					//S.set(j, i, count);
+                    S[i][j] = count;
+                    S[j][i] = count;
 				}
 			}
 		}
@@ -155,7 +158,8 @@ public class MyClusterer {
             }
             for (int j = i + 1; j < corePts.size(); j ++){
                 if (i != j){
-                    if (S.get(corePts.get(i), corePts.get(j)) >= SNNEps){
+                    //if (S.get(corePts.get(i), corePts.get(j)) >= SNNEps){
+                    if (S[corePts.get(i)][corePts.get(j)] >= SNNEps){
                         uf.union(corePts.get(i), corePts.get(j));
                         countExpanded ++;
                     }
@@ -240,15 +244,12 @@ public class MyClusterer {
     public static void main(String[] args) throws FileNotFoundException, IOException {
         PropertyConfigurator.configure( "log4j.properties" );
 
-
-
         BufferedReader in = new BufferedReader(new FileReader("/home/eric-lin/StateGrid/TrajectoriesMining/station_candidate_withtime_1314.txt"));
         String line;
         String[] lineSplit;
         line = in.readLine();
         lineSplit = line.split(" ");
         int N = Integer.valueOf(lineSplit[0]);
-        N = 50000;
         int dim = Integer.valueOf(lineSplit[1]);
         double[][] X = new double[N][dim];
         double[] point;
@@ -267,7 +268,7 @@ public class MyClusterer {
         MyClusterer cls = new MyClusterer(200, 30, 100, 100, X);
 
         cls.cluster(X);
-        cls.output("/home/eric-lin/StateGrid/TrajectoriesMining/station_candidate_withtime_1314.txt.cluster");
+        cls.output("/home/eric-lin/StateGrid/TrajectoriesMining/station_candidate_withtime_1314.txt.cluster2");
 
     }
 }
