@@ -1,9 +1,14 @@
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 
+import org.apache.log4j.PropertyConfigurator;
 import org.la4j.iterator.VectorIterator;
 import org.la4j.matrix.sparse.CRSMatrix;
 
@@ -225,59 +230,33 @@ public class SNNClusterer {
 
 
 
-	// public static void main(String[] args) throws IOException {
-	//
-	// // test data set -> two normals: (0,0.5) and (10,0.5); 30 points each
-	// CSVLoader csvLoader = new CSVLoader();
-	// csvLoader.setSource(new File("C:/Users/Cássio/Dropbox/snn/simple.csv"));
-	// csvLoader.setNoHeaderRowPresent(true);
-	// Instances inst = csvLoader.getDataSet();
-	//
-	// double[][] X = new double[inst.numInstances()][inst.numAttributes()];
-	// for (int i = 0; i < inst.numInstances(); i++)
-	// X[i] = inst.instance(i).toDoubleArray();
-	//
-	// int[] labels = snn(X, 20, 10, 5);
-	// plotScatter(X, labels);
-	// }
-	//
-	// private static void plotScatter(double[][] X, int[] labels) {
-	// List<Paint> colors = Arrays.asList(ChartColor.createDefaultPaintArray());
-	// Collections.reverse(colors);
-	//
-	// XYSeriesCollection dataset = new XYSeriesCollection();
-	//
-	// HashSet<Integer> clusters = MyUtils.getUniqueElements(labels);
-	//
-	// Object[] uclusters = clusters.toArray();
-	//
-	// for (int i = 0; i < uclusters.length; i++) {
-	// int mi = (Integer) uclusters[i];
-	//
-	// XYSeries p = new XYSeries("Cluster " + mi);
-	// for (int j = 0; j < labels.length; j++)
-	// if (labels[j] == mi)
-	// p.add(X[j][0], X[j][1]);
-	// dataset.addSeries(p);
-	// }
-	//
-	// // create chart:
-	// JFreeChart chart = ChartFactory.createScatterPlot("Scatter", "X0", "X1",
-	// dataset);
-	// XYPlot xypl = chart.getXYPlot();
-	//
-	// for (int i = 0; i < dataset.getSeriesCount(); i++) {
-	// int mi = (Integer) uclusters[i];
-	// xypl.getRenderer().setSeriesPaint(i, colors.get(i));
-	// }
-	//
-	// for(int i = 0; i < dataset.getSeriesCount(); i++)
-	// xypl.getRenderer().setSeriesShape(i, ShapeUtilities.createDiamond(3));
-	//
-	// ChartFrame frame = new ChartFrame("PROStream",chart);
-	// frame.pack();
-	// frame.setVisible(true);
-	//
-	// }
-	//
+public static void main(String[] args) throws FileNotFoundException, IOException {
+        PropertyConfigurator.configure( "log4j.properties" );
+
+        BufferedReader in = new BufferedReader(new FileReader("/home/eric-lin/StateGrid/TrajectoriesMining/station_candidate_withtime_1314.txt"));
+        String line;
+        String[] lineSplit;
+        line = in.readLine();
+        lineSplit = line.split(" ");
+        int N = Integer.valueOf(lineSplit[0]);
+        int dim = Integer.valueOf(lineSplit[1]);
+        double[][] X = new double[N][dim];
+        double[] point;
+        for (int i = 0; i < N; i ++){
+            line = in.readLine();
+            lineSplit = line.split(",");
+            point = new double[dim];
+            for(int j = 0; j < dim; j ++){
+                point[j] = Double.valueOf(lineSplit[j]);
+            }
+        }
+        in.close();
+
+        System.out.println("Reading data finished!");
+
+        SNNClusterer cls = new SNNClusterer();
+
+        cls.snn(X, 100, 200, 30);
+
+    }
 }

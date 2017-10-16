@@ -4,6 +4,7 @@
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 
 public class UnionFind {
     private int[] group;
@@ -68,13 +69,11 @@ public class UnionFind {
 	}
 
 	public int[] getGroup(){
+
 		return group;
 	}
 
-	public HashMap<Integer, ArrayList<Integer>> getGroups(){
-        HashMap<Integer, ArrayList<Integer>> result = new HashMap<>();
-        return result;
-	}
+
 
 	public static void main(String[] args) {
         int[] groups = {2, -1, 2, -1, 7, 5, 6, 7};
