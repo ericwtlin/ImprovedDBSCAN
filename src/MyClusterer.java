@@ -6,10 +6,12 @@ import org.la4j.iterator.VectorIterator;
 import org.la4j.matrix.sparse.CRSMatrix;
 
 import java.io.*;
+import java.nio.Buffer;
 import java.util.*;
 import org.apache.log4j.*;
-
+import utils.FileOperation;
 /**
+ *
  *
  * Developed based on SNN of Cássio M. M. Pereira <cassiomartini@gmail.com>
  */
@@ -38,7 +40,10 @@ public class MyClusterer {
     double[][] X = null;
     int[] clusterResult = null;
 
-    Logger logger  =  Logger.getLogger(MyClusterer.class);
+    int corePointNum = -1;
+    int mergeTimes = -1;
+
+    static Logger logger;
 
 	public MyClusterer(int K, int SNNEps, double distEps, int minPts, double[][] X){
         this.K = K;
@@ -52,6 +57,11 @@ public class MyClusterer {
 	    return this.cluster(this.X);
     }
 
+    /**
+     *
+     * @param X
+     * @return int[] result,  the result[i] indicates the group num, which might be sparse. Specially, -1 indicates noise.
+     */
 	public int[] cluster(double[][] X) {
 		int N = X.length; // number of points
 		int d = X[0].length; // dimensionality
@@ -80,8 +90,16 @@ public class MyClusterer {
 
         boolean[] cores = new boolean[N];
         ArrayList<Integer> corePts = new ArrayList<Integer>(N/3);
+
+        Scheduler scheduler = new Scheduler(N);
+        int percent;
 		for (int i = 0; i < N; i++) {
             //get the nearest neighbors. Neighbors are returned in ascending order of distance to key.
+		    percent = scheduler.getNewSchedule();
+		    if (percent != -1){
+		        logger.info(String.format("Get nearest neighbors %d%%", percent));
+            }
+
 			Object[] nns = kdtree.nearest(X[i], Math.max(K, minPts) + 1);
 
 			hs = new HashSet<Integer>();
@@ -93,7 +111,7 @@ public class MyClusterer {
              * If the distance between current node and the (minPts+1)-th nearest neighbors is larger than Eps,
              * current node is not a core point.
              */
-            if (EuclideanDistance(X[i], X[(int) (nns[minPts + 1])]) <= distEps){
+            if (EuclideanDistance(X[i], X[(int) (nns[minPts])]) <= distEps){
                 cores[i] = true;
                 corePts.add(i);
             }
@@ -107,26 +125,25 @@ public class MyClusterer {
 
 		// The sparse matrix S holds in element (i,j) the SNN-similarity between
 		// points i and j.
-		//CRSMatrix S = new CRSMatrix(N, N);
-        int[][] S = new int[N][N];
+		CRSMatrix S = new CRSMatrix(N, N);
+        //int[][] S = new int[corePts.size()][corePts.size()];    //storing the SNN similarity between core points
 		int count;
 
-		Scheduler scheduler = new Scheduler(N-1);
-		int percent;
-		for (int i = 0; i < (N - 1); i++) {
+		scheduler = new Scheduler(corePts.size() - 1);
+		for (int i = 0; i < (corePts.size() - 1); i++) {
 		    percent = scheduler.getNewSchedule();
 		    if (percent != -1){
 		        logger.info(String.format("Calc SNN similartiy %d%%", percent));
             }
-			for (int j = i + 1; j < N; j++) {
+			for (int j = i + 1; j < corePts.size(); j++) {
 				// create a link between i-j only if i is in j's kNN neighborhood
 				// and j is in i's kNN neighborhood
-				if (kns[i].contains(j) && kns[j].contains(i)) {
+				if (kns[corePts.get(i)].contains(corePts.get(j)) && kns[corePts.get(j)].contains(corePts.get(i))) {
 					count = countIntersect(kns[i], kns[j]);
-					//S.set(i, j, count);
-					//S.set(j, i, count);
-                    S[i][j] = count;
-                    S[j][i] = count;
+					S.set(i, j, count);
+					S.set(j, i, count);
+                    //S[i][j] = count;
+                    //S[j][i] = count;
 				}
 			}
 		}
@@ -158,8 +175,8 @@ public class MyClusterer {
             }
             for (int j = i + 1; j < corePts.size(); j ++){
                 if (i != j){
-                    //if (S.get(corePts.get(i), corePts.get(j)) >= SNNEps){
-                    if (S[corePts.get(i)][corePts.get(j)] >= SNNEps){
+                    if (S.get(corePts.get(i), corePts.get(j)) >= SNNEps){
+                    //if (S[i][j] >= SNNEps){
                         uf.union(corePts.get(i), corePts.get(j));
                         countExpanded ++;
                     }
@@ -167,7 +184,11 @@ public class MyClusterer {
             }
         }
 
+        logger.info(String.format("Number of core points: %d", corePts.size()));
         logger.info(String.format("Clusters expanded, totally %d pairs of clusters merged", countExpanded));
+        this.corePointNum = corePts.size();
+        this.mergeTimes = countExpanded;
+
         clusterResult = uf.getGroup();
         HashSet<Integer> groupId = new HashSet<Integer>();
 	    for (int idx : clusterResult){
@@ -193,12 +214,24 @@ public class MyClusterer {
         }
     }
 
-	public static int countIntersect(HashSet<Integer> h1, HashSet<Integer> h2) {
-        Set<Integer> result = new HashSet<Integer>();
-        result.addAll(h1);
-        result.retainAll(h2);
-		return result.size();
-	}
+	public static int countIntersect (HashSet<Integer> h1, HashSet<Integer> h2) {
+        HashSet<Integer> a;
+        HashSet<Integer> b;
+        if (h1.size() <= h2.size()) {
+            a = h1;
+            b = h2;
+        } else {
+            a = h2;
+            b = h1;
+        }
+        int count = 0;
+        for (Integer e : a) {
+            if (b.contains(e)) {
+                count++;
+            }
+        }
+        return count;
+    }
 
 
     public double EuclideanDistance(double[] point1, double[] point2){
@@ -209,7 +242,11 @@ public class MyClusterer {
         return Math.sqrt(dist);
     }
 
-    public void output(String groupPath){
+    public void outputInList(String groupPath){
+        /*
+        output in a single file, in which each row indicates a point.
+        The last column of a row means the group index.
+         */
         BufferedWriter out = null, outCenter = null;
         StringBuilder sb = new StringBuilder();
         try {
@@ -236,23 +273,143 @@ public class MyClusterer {
                 e.printStackTrace();
             }
         }
+	}
 
+    /**
+     * output in a directory which contains files correponding to each gruops
+     * In the group file, each row indicates a point
+     *
+     * In the directory, there is another summary file that contains summary information.
+     * @param groupDirPath
+     * @throws Exception
+     */
+	public void outputInGroups(String groupDirPath) throws Exception {
 
+        if (!groupDirPath.endsWith(File.separator)){
+            groupDirPath = groupDirPath + File.separator;
+        }
+
+        FileOperation.mkDir(groupDirPath);
+
+        HashMap<Integer, ArrayList<Integer>> groupListMap = new HashMap<>();   //key: intial sparse cluster result index, value: point indices
+        HashMap<Integer, Integer> groupSizeMap = new HashMap<>(); // key: final cluster index; value: group size
+        groupListMap.put(-1, new ArrayList<>());
+        for (int i = 0; i < clusterResult.length; i ++){
+            if (!groupListMap.containsKey(clusterResult[i])){
+                groupListMap.put(clusterResult[i], new ArrayList<>());
+            }
+            groupListMap.get(clusterResult[i]).add(i);
+        }
+
+        StringBuilder sb = null;
+        BufferedWriter out = null;
+        int groupCount = -1;
+        if (groupListMap.containsKey(-1))  // noise
+            groupCount ++;
+
+        int maxGroupSize = -1;
+        int minGroupSize = Integer.MAX_VALUE;
+        int averageGroupSize = 0;       //except noise
+        try {
+            for (HashMap.Entry entry: groupListMap.entrySet()){
+                if ((int)entry.getKey() == -1){
+                    out = new BufferedWriter(new FileWriter(new File(String.format("%snoise.txt", groupDirPath))));
+                }else{
+                    groupCount ++;
+                    out = new BufferedWriter(new FileWriter(new File(String.format("%scluster_%d.txt", groupDirPath, groupCount))));
+                }
+
+                for (int pointIndex: groupListMap.get(entry.getKey())){
+                    sb = new StringBuilder();
+                    for (int j = 0; j < X[pointIndex].length; j ++){
+                        if (j != 0){
+                            sb.append(",");
+                        }
+                        sb.append(X[pointIndex][j]);
+                    }
+                    sb.append("\n");
+                    out.write(sb.toString());
+                }
+                out.close();
+                if ((int)entry.getKey() == -1){
+                    groupSizeMap.put(0, groupListMap.get(entry.getKey()).size());
+                }else {
+                    groupSizeMap.put(groupCount, groupListMap.get(entry.getKey()).size());
+                    averageGroupSize += groupListMap.get(entry.getKey()).size();
+                    if ( groupListMap.get(entry.getKey()).size() > maxGroupSize){
+                        maxGroupSize =  groupListMap.get(entry.getKey()).size();
+                    }
+                    if ( groupListMap.get(entry.getKey()).size() < minGroupSize){
+                        minGroupSize =  groupListMap.get(entry.getKey()).size();
+                    }
+                }
+            }
+            averageGroupSize = averageGroupSize / groupCount;
+
+            out = new BufferedWriter(new FileWriter(new File(String.format("%sa_summary.txt", groupDirPath))));
+            out.write(String.format("Core point num: %d\n", this.corePointNum));
+            out.write(String.format("Merged times: %d\n", this.mergeTimes));
+            out.write(String.format("Final cluster num(except noise): %d\n", groupCount));
+            out.write(String.format("Max cluster size: %d; min cluster size: %d; average cluster size: %d\n\n", maxGroupSize, minGroupSize, averageGroupSize));
+            out.write(String.format("noise points: %d\n", groupSizeMap.get(0)));
+            for (int i = 1; i <= groupCount; i ++){
+                out.write(String.format("cluster_%d:%d\n", i, groupSizeMap.get(i)));
+            }
+            out.close();
+        }catch (IOException e){
+            e.printStackTrace();
+        }finally {
+            try {
+                out.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
 	}
 
 
-    public static void main(String[] args) throws FileNotFoundException, IOException {
-        PropertyConfigurator.configure( "log4j.properties" );
+    public static void main(String[] args) throws Exception {
+	    PropertyConfigurator.configure( "log4j.properties" );
 
-        BufferedReader in = new BufferedReader(new FileReader("/home/eric-lin/StateGrid/TrajectoriesMining/station_candidate_withtime_1314.txt"));
+        if (args.length <= 0) {
+          System.out.println("Command: java Clusterer" +
+                          "--K=K nearest neighbors " +
+                          "--SNNEps=SNNEps " +
+                          "--distEps=distEps " +
+                          "--minPts= minPts " +
+                          "--candidate_path=candidate path "
+          );
+          System.exit(1);
+        }
+
+        ConfigParser config = new ConfigParser(args);
+        config.checkRequiredArgs(new String[] { "K", "SNNEps", "distEps",
+            "minPts", "candidate_path"});
+
+        int K = Integer.valueOf(config.getOption("K"));
+        int SNNEps = Integer.valueOf(config.getOption("SNNEps"));
+        int distEps = Integer.valueOf(config.getOption("distEps"));
+        int minPts = Integer.valueOf(config.getOption("minPts"));
+        String candidatePath = config.getOption("candidate_path");
+
+        /*
+        int K = 500;
+        int SNNEps = 50;
+        int distEps = 100;
+        int minPts = 2000;
+        */
+
+        logger = Logger.getLogger(MyClusterer.class);
+
+        BufferedReader in = new BufferedReader(new FileReader(candidatePath));
         String line;
         String[] lineSplit;
         line = in.readLine();
         lineSplit = line.split(" ");
         int N = Integer.valueOf(lineSplit[0]);
+        N = 150000;
         int dim = Integer.valueOf(lineSplit[1]);
         double[][] X = new double[N][dim];
-        double[] point;
         for (int i = 0; i < N; i ++){
             line = in.readLine();
             lineSplit = line.split(",");
@@ -265,10 +422,12 @@ public class MyClusterer {
         System.out.println("Reading data finished!");
 
         //MyClusterer cls = new MyClusterer(100, 30, 20, 50, X);
-        MyClusterer cls = new MyClusterer(200, 30, 100, 100, X);
+        MyClusterer cls = new MyClusterer(K, SNNEps, distEps, minPts, X);
 
         cls.cluster(X);
-        cls.output("/home/eric-lin/StateGrid/TrajectoriesMining/station_candidate_withtime_1314.txt.cluster2");
+        //cls.outputInList(String.format("/home/eric-lin/StateGrid/TrajectoriesMining/cluster_results/station_candidate_withtime_1314.N%d_K%d_SNNEps%d_distEps%d_minPts%d.cluster", N, K, SNNEps, distEps, minPts));
+        cls.outputInGroups(String.format("/home/eric-lin/workspace/ImprovedDBSCAN/cluster_results/station_candidate_withtime_1314.N%d_K%d_SNNEps%d_distEps%d_minPts%d.clusters", N, K, SNNEps, distEps, minPts));
+
 
     }
 }
