@@ -4,7 +4,13 @@ import java.io.File;
 
 public class FileOperation {
 
-    public static void mkDir(String dirPath){
+    /**
+     *  make dir
+     * @param dirPath
+     * @param force when the dir already exists, if force == true, remove the dir, else raise Exception
+     * @throws Exception
+     */
+    public static void mkDir(String dirPath, boolean force) throws Exception {
         File dir = new File(dirPath);
         if (!dir.exists()){
             if (dir.mkdirs()){
@@ -13,8 +19,11 @@ public class FileOperation {
                 System.out.println(String.format("Create dir %s failed", dirPath));
             }
         }else{
-            //throw new Exception(String.format("Dir %s already exists!", groupDirPath));
-            FileOperation.cleanDir(dir);
+            if (force == true) {
+                FileOperation.cleanDir(dir);
+            }else {
+                throw new Exception(String.format("Dir %s already exists!", dirPath));
+            }
         }
         try {
             Thread.sleep(3000);
@@ -34,6 +43,7 @@ public class FileOperation {
         }
         return true;
     }
+
 	public static boolean deleteDir(File dir) {
         if (dir.isDirectory()) {
             String[] children = dir.list();

@@ -69,18 +69,20 @@ public class UnionFind {
 	}
 
 	public int[] getGroup(){
-
+		for (int i = 0; i < group.length; i ++){
+			group[i] = find(i);
+		}
 		return group;
 	}
 
 
 
 	public static void main(String[] args) {
-        int[] groups = {2, -1, 2, -1, 7, 5, 6, 7};
+        int[] groups = {-1, 1, 2, -1, 4, 4, 6, -1, 8, 9};
 		UnionFind fuf = new UnionFind(groups);
-		fuf.union(1, 3);
-		fuf.union(2, 6);
-		fuf.union(4, 5);
+		fuf.union(1, 2);
+		fuf.union(4, 8);
+		fuf.getGroup();
 		for (int i = 0; i < groups.length; i ++){
 			System.out.println(String.format("%d parent: %d", i, fuf.find(groups[i])));
 		}

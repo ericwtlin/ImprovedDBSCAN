@@ -15,6 +15,12 @@ import utils.FileOperation;
  *
  * Developed based on SNN of Cássio M. M. Pereira <cassiomartini@gmail.com>
  */
+
+enum Method {
+    DBSCAN, MyCluster;
+}
+
+
 public class MyClusterer {
 
 	/**
@@ -43,14 +49,21 @@ public class MyClusterer {
     int corePointNum = -1;
     int mergeTimes = -1;
 
+    Method method;
+
+    int debugCount1 = 0;
+    int debugCount2 = 0;
+    int debugCount3 = 0;
+
     static Logger logger;
 
-	public MyClusterer(int K, int SNNEps, double distEps, int minPts, double[][] X){
+	public MyClusterer(int K, int SNNEps, double distEps, int minPts, double[][] X, Method method){
         this.K = K;
         this.SNNEps = SNNEps;
         this.distEps = distEps;
         this.minPts = minPts;
         this.X = X;
+        this.method = method;
     }
 
     public int[] cluster(){
@@ -65,13 +78,6 @@ public class MyClusterer {
 	public int[] cluster(double[][] X) {
 		int N = X.length; // number of points
 		int d = X[0].length; // dimensionality
-
-        /*
-		if (minPts >= K) {
-			throw new RuntimeException(
-					"MinPts has to be smaller than K. No sense in a point having more than K neighbors.");
-		}
-		*/
 
 		// STEP 1 - get a similarity matrix
 
@@ -154,13 +160,17 @@ public class MyClusterer {
 		// within Eps of each other, then place them in the same cluster
         int[] cluster = new int[N]; //labels[i] indicates node i belongs to cluster of labels[i]; labels[i] == -1 indicates node i is a noise;
         Arrays.fill(cluster, -1);
+        for (int i = 0; i < corePts.size(); i ++){
+            cluster[corePts.get(i)] = corePts.get(i);
+        }
+
         scheduler = new Scheduler(corePts.size());
         for (int i = 0; i < corePts.size(); i ++){
             percent = scheduler.getNewSchedule();
             if (percent != -1) {
                 logger.info(String.format("Forming clusters %d%%", percent));
             }
-            findNeighborsInDistEps(corePts.get(i), X, cluster);
+            findNeighborsInDistEps(corePts.get(i), X, cluster, kns[corePts.get(i)]);
         }
 
         logger.info("Clusters formed.");
@@ -174,18 +184,25 @@ public class MyClusterer {
 		        logger.info(String.format("Expanding clusters %d%%", percent));
             }
             for (int j = i + 1; j < corePts.size(); j ++){
-                if (i != j){
-                    if (S.get(corePts.get(i), corePts.get(j)) >= SNNEps){
-                    //if (S[i][j] >= SNNEps){
+                if (i != j) {
+                    if (this.method.equals(Method.MyCluster))
+                        if (S.get(corePts.get(i), corePts.get(j)) >= SNNEps) {
+                            uf.union(corePts.get(i), corePts.get(j));
+                            countExpanded++;
+                        }
+                }else if (this.method.equals(Method.DBSCAN)){
+                    if (EuclideanDistance(X[corePts.get(i)], X[corePts.get(j)]) <= 0.5 * distEps){
                         uf.union(corePts.get(i), corePts.get(j));
-                        countExpanded ++;
+                        countExpanded++;
                     }
                 }
             }
         }
 
-        logger.info(String.format("Number of core points: %d", corePts.size()));
-        logger.info(String.format("Clusters expanded, totally %d pairs of clusters merged", countExpanded));
+        logger.info(String.format("group changed counts: %d; unchanged count: %d, unchanged&self: %d", this.debugCount1, this.debugCount2, this.debugCount3));
+
+        logger.info(String.format("Number of core points: %d;", corePts.size()));
+        logger.info(String.format("Clusters expanded, totally %d pairs of clusters merged;", countExpanded));
         this.corePointNum = corePts.size();
         this.mergeTimes = countExpanded;
 
@@ -194,16 +211,39 @@ public class MyClusterer {
 	    for (int idx : clusterResult){
 	    	groupId.add(idx);
 		}
-		logger.info(String.format("Clustering end! Got %d clusters", groupId.size()));
-        return uf.getGroup();
+		logger.info(String.format("Clustering end! Except noise, got %d clusters;", groupId.size() - 1));
+        return clusterResult;
 	}
 
+    /**
+     * 为每个点分派最近的核心
+     * @param point
+     * @param X
+     * @param cluster
+     * @param kns
+     */
 	public void findNeighborsInDistEps(int point, double[][] X,
                                                        //KDTree kdtree,
                                                        //HashMap<Integer, ArrayList<Integer>> kns,
-                                                       int[] cluster){
-        // TO BE REFINED
+                                                       int[] cluster,
+                                                       HashSet<Integer> kns){
         double dist = 0;
+        for (int neighbor: kns){
+            dist = EuclideanDistance(X[point], X[neighbor]);
+            if (dist <= distEps){
+                if (cluster[neighbor] == -1 || dist < EuclideanDistance(X[neighbor], X[cluster[neighbor]])){
+                    cluster[neighbor] = point;
+                    this.debugCount1++;
+                }else{
+                    if (neighbor != cluster[neighbor])
+                        this.debugCount2 ++;
+                    else
+                        this.debugCount3 ++;
+                }
+            }
+
+        }
+        /*
         for (int i = 0; i < X.length; i ++){
             dist = EuclideanDistance(X[point], X[i]);
             if (dist <= distEps){
@@ -212,6 +252,7 @@ public class MyClusterer {
                 }
             }
         }
+        */
     }
 
 	public static int countIntersect (HashSet<Integer> h1, HashSet<Integer> h2) {
@@ -289,7 +330,7 @@ public class MyClusterer {
             groupDirPath = groupDirPath + File.separator;
         }
 
-        FileOperation.mkDir(groupDirPath);
+        //FileOperation.mkDir(groupDirPath);
 
         HashMap<Integer, ArrayList<Integer>> groupListMap = new HashMap<>();   //key: intial sparse cluster result index, value: point indices
         HashMap<Integer, Integer> groupSizeMap = new HashMap<>(); // key: final cluster index; value: group size
@@ -309,7 +350,7 @@ public class MyClusterer {
 
         int maxGroupSize = -1;
         int minGroupSize = Integer.MAX_VALUE;
-        int averageGroupSize = 0;       //except noise
+        double averageGroupSize = 0;       //except noise
         try {
             for (HashMap.Entry entry: groupListMap.entrySet()){
                 if ((int)entry.getKey() == -1){
@@ -350,8 +391,13 @@ public class MyClusterer {
             out.write(String.format("Core point num: %d\n", this.corePointNum));
             out.write(String.format("Merged times: %d\n", this.mergeTimes));
             out.write(String.format("Final cluster num(except noise): %d\n", groupCount));
-            out.write(String.format("Max cluster size: %d; min cluster size: %d; average cluster size: %d\n\n", maxGroupSize, minGroupSize, averageGroupSize));
+            out.write(String.format("Max cluster size: %d; min cluster size: %d; average cluster size: %f\n\n", maxGroupSize, minGroupSize, averageGroupSize));
             out.write(String.format("noise points: %d\n", groupSizeMap.get(0)));
+
+            logger.info(String.format("Final cluster num(except noise): %d\n", groupCount));
+            logger.info(String.format("Max cluster size: %d; min cluster size: %d; average cluster size: %f\n\n", maxGroupSize, minGroupSize, averageGroupSize));
+            logger.info(String.format("noise points: %d\n", groupSizeMap.get(0)));
+
             for (int i = 1; i <= groupCount; i ++){
                 out.write(String.format("cluster_%d:%d\n", i, groupSizeMap.get(i)));
             }
@@ -369,7 +415,6 @@ public class MyClusterer {
 
 
     public static void main(String[] args) throws Exception {
-	    PropertyConfigurator.configure( "log4j.properties" );
 
         if (args.length <= 0) {
           System.out.println("Command: java Clusterer" +
@@ -377,7 +422,10 @@ public class MyClusterer {
                           "--SNNEps=SNNEps " +
                           "--distEps=distEps " +
                           "--minPts= minPts " +
-                          "--candidate_path=candidate path "
+                          "--candidate_path=candidate path " +
+                          "--N=N " +
+                          "--method={dbscan, mycluster}" +
+                          "--force={true,false}"
           );
           System.exit(1);
         }
@@ -391,6 +439,9 @@ public class MyClusterer {
         int distEps = Integer.valueOf(config.getOption("distEps"));
         int minPts = Integer.valueOf(config.getOption("minPts"));
         String candidatePath = config.getOption("candidate_path");
+        int NSmall = Integer.valueOf(config.getOption("N", "-1"));
+        String method = config.getOption("method", "mycluster").toLowerCase();
+        boolean force = config.getOption("force", "false").toLowerCase().equals("false") ? false : true;
 
         /*
         int K = 500;
@@ -399,15 +450,29 @@ public class MyClusterer {
         int minPts = 2000;
         */
 
-        logger = Logger.getLogger(MyClusterer.class);
 
         BufferedReader in = new BufferedReader(new FileReader(candidatePath));
         String line;
         String[] lineSplit;
         line = in.readLine();
         lineSplit = line.split(" ");
-        int N = Integer.valueOf(lineSplit[0]);
-        N = 150000;
+        int N;
+        if (NSmall == -1){
+            N = Integer.valueOf(lineSplit[0]);
+        }else{
+            N = NSmall;
+        }
+
+        String resultDirName = String.format("/home/eric-lin/workspace/ImprovedDBSCAN/cluster_results/station_candidate_withtime.N%d_K%d_SNNEps%d_distEps%d_minPts%d.clusters/", N, K, SNNEps, distEps, minPts);
+        if (!resultDirName.endsWith(File.separator)){
+            resultDirName = resultDirName + File.separator;
+        }
+        FileOperation.mkDir(resultDirName, force);
+        String logPath = resultDirName + "cluster.log";
+        System.setProperty("logfile.name", logPath);
+        PropertyConfigurator.configure( "log4j.properties" );
+        logger = Logger.getLogger(MyClusterer.class);
+
         int dim = Integer.valueOf(lineSplit[1]);
         double[][] X = new double[N][dim];
         for (int i = 0; i < N; i ++){
@@ -422,11 +487,16 @@ public class MyClusterer {
         System.out.println("Reading data finished!");
 
         //MyClusterer cls = new MyClusterer(100, 30, 20, 50, X);
-        MyClusterer cls = new MyClusterer(K, SNNEps, distEps, minPts, X);
+        MyClusterer cls = null;
+        if (method.equals("mycluster")){
+            cls = new MyClusterer(K, SNNEps, distEps, minPts, X, Method.MyCluster);
+        } else if (method.equals("dbscan")){
+            cls = new MyClusterer(K, SNNEps, distEps, minPts, X, Method.DBSCAN);
+        }
 
         cls.cluster(X);
         //cls.outputInList(String.format("/home/eric-lin/StateGrid/TrajectoriesMining/cluster_results/station_candidate_withtime_1314.N%d_K%d_SNNEps%d_distEps%d_minPts%d.cluster", N, K, SNNEps, distEps, minPts));
-        cls.outputInGroups(String.format("/home/eric-lin/workspace/ImprovedDBSCAN/cluster_results/station_candidate_withtime_1314.N%d_K%d_SNNEps%d_distEps%d_minPts%d.clusters", N, K, SNNEps, distEps, minPts));
+        cls.outputInGroups(resultDirName);
 
 
     }
