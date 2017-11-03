@@ -164,6 +164,7 @@ public class MyClusterer {
             cluster[corePts.get(i)] = corePts.get(i);
         }
 
+        int tmp;
         scheduler = new Scheduler(corePts.size());
         for (int i = 0; i < corePts.size(); i ++){
             percent = scheduler.getNewSchedule();
@@ -187,13 +188,17 @@ public class MyClusterer {
                 if (i != j) {
                     if (this.method.equals(Method.MyCluster))
                         if (S.get(corePts.get(i), corePts.get(j)) >= SNNEps) {
-                            uf.union(corePts.get(i), corePts.get(j));
-                            countExpanded++;
+                            tmp = uf.union(corePts.get(i), corePts.get(j));
+                            if (tmp != 2) {
+                                countExpanded++;
+                            }
                         }
                 }else if (this.method.equals(Method.DBSCAN)){
                     if (EuclideanDistance(X[corePts.get(i)], X[corePts.get(j)]) <= 0.5 * distEps){
-                        uf.union(corePts.get(i), corePts.get(j));
-                        countExpanded++;
+                        tmp = uf.union(corePts.get(i), corePts.get(j));
+                        if (tmp != 2){
+                            countExpanded++;
+                        }
                     }
                 }
             }
@@ -463,7 +468,7 @@ public class MyClusterer {
             N = NSmall;
         }
 
-        String resultDirName = String.format("/home/eric-lin/workspace/ImprovedDBSCAN/cluster_results/station_candidate_withtime.N%d_K%d_SNNEps%d_distEps%d_minPts%d.clusters/", N, K, SNNEps, distEps, minPts);
+        String resultDirName = String.format("/home/eric-lin/workspace/ImprovedDBSCAN/cluster_results/station_candidate_notime.N%d_K%d_SNNEps%d_distEps%d_minPts%d.clusters/", N, K, SNNEps, distEps, minPts);
         if (!resultDirName.endsWith(File.separator)){
             resultDirName = resultDirName + File.separator;
         }
@@ -497,6 +502,7 @@ public class MyClusterer {
         cls.cluster(X);
         //cls.outputInList(String.format("/home/eric-lin/StateGrid/TrajectoriesMining/cluster_results/station_candidate_withtime_1314.N%d_K%d_SNNEps%d_distEps%d_minPts%d.cluster", N, K, SNNEps, distEps, minPts));
         cls.outputInGroups(resultDirName);
+        System.out.println(String.format("Results are saved in: %s", resultDirName));
 
 
     }

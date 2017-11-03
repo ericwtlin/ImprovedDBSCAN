@@ -17,7 +17,7 @@ public class Main {
         /*
         File[] files = getFiles("./data");
 
-        MyDBSCANClusterer<DoublePoint> dbscan = new MyDBSCANClusterer<DoublePoint>(.05, 50);
+        DBSCANClusterer<DoublePoint> dbscan = new DBSCANClusterer<DoublePoint>(.05, 50);
         List<DoublePoint> points = getGPS(files);
         List<Cluster<DoublePoint>> cluster = dbscan.cluster(points);
 

@@ -47,15 +47,22 @@ public class UnionFind {
 
 	}
 	/*
-	 * 合并两个集合(加速)
-	 * 将表示小树的数根改为表示大树的数根的儿子结点
+	 *
+	 *
 	 */
-	public void union(int a, int b){
+
+	/**
+	 * 合并两个集合(加速), 将表示小树的数根改为表示大树的数根的儿子结点
+	 * @param a
+	 * @param b
+	 * @return 2:两个节点本来就是一类；1:本来不是同类，合并成功；
+	 */
+	public int union(int a, int b){
 		int rootA = find(a);
 		int rootB = find(b);
 
 		if (rootA == rootB){
-			return;
+			return 2;
 		}else{
 			if (rank[rootA] <= rank[rootB]){
 				group[rootA] = rootB;
@@ -65,6 +72,7 @@ public class UnionFind {
 			}else{
 				group[rootB] = rootA;
 			}
+			return 1;
 		}
 	}
 
