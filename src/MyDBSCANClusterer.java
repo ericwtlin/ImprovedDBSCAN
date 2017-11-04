@@ -364,8 +364,8 @@ public class MyDBSCANClusterer {
         config.checkRequiredArgs(new String[] { "distEps", "distExpandEps",
             "minPts", "candidate_path"});
 
-        double distEps = Integer.valueOf(config.getOption("distEps"));
-        double distExpandEps = Integer.valueOf(config.getOption("distExpandEps"));
+        double distEps = Double.valueOf(config.getOption("distEps"));
+        double distExpandEps = Double.valueOf(config.getOption("distExpandEps"));
         int minPts = Integer.valueOf(config.getOption("minPts"));
         String candidatePath = config.getOption("candidate_path");
         int NSmall = Integer.valueOf(config.getOption("N", "-1"));
